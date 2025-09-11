@@ -3,18 +3,19 @@ import pandas as pd
 import requests_cache
 from retry_requests import retry
 from ipyleaflet import Map, DrawControl
+from ipyleaflet import Polygon as LeafletPolygon
 from shapely.geometry import Polygon
+import utils
 
 
 
 class WeatherRetriever:
     def __init__(self):
         self.coordinates = None
+        self.constraints = None
         self.centroid = None
         self.weather = None
-        self.reference_height = 100  # meters (current data height)
-        self.target_height = 90      # meters (desired height, change as needed)
-        self.alpha = 0.12             # wind shear exponent
+        
 
     def retrieve_weather(self, year = 2023):
         """
@@ -89,7 +90,7 @@ class WeatherRetriever:
                 "color": "#6bc2e5",
                 "weight": 4,
                 "opacity": 1.0,
-                "fillOpacity": 0.5,
+                "fillOpacity": 0.2,
             },
             "drawError": {
                 "color": "#dd253b",
@@ -119,9 +120,62 @@ class WeatherRetriever:
         if not self.coordinates:
             raise ValueError("No coordinates available. Please draw a polygon first.")
         elif len(self.coordinates) > 1:
-            raise ValueError(f"Please draw just one polyogon. {len(self.coordinates)} polygons detected.")
+            raise ValueError(f"Please draw just one polygon. {len(self.coordinates)} polygons detected.")
         else:
             polygon = Polygon(self.coordinates[0])
             centroid = polygon.centroid
             self.centroid = (centroid.y, centroid.x)
+            self.best_epsg = utils.best_epsg(self.centroid)
 
+    def set_constraints(self):
+        if self.coordinates is None:
+            raise ValueError("No coordinates available. Please draw a polygon first.")
+        elif self.centroid is None:
+            self.calculate_centroid() 
+        
+        m = Map(center = self.centroid, zoom = 10)
+        draw_control = DrawControl(circle = {}, circlemarker = {}, marker = {}, polyline = {})
+        draw_control.polygon = {
+            "shapeOptions": {
+                "color": "#81125c",
+                "weight": 4,
+                "opacity": 1.0,
+                "fillOpacity": 0.4,
+            },
+            "drawError": {
+                "color": "#dd253b",
+                "message": "Oups! You can't draw that!",
+            },
+            "allowIntersection": False,
+        }
+        m.add_control(draw_control)
+
+        polygon_coords = self.flip_coordinates(self.coordinates)[0]
+        polygon = LeafletPolygon(
+            locations=polygon_coords,
+            color="blue",  
+            fill_color="blue",
+            fill_opacity=0.2,
+            weight=4
+        )
+        m.add(polygon)
+
+        constraints = []
+
+        def handle_draw(target, action, geo_json):
+            if action == "created":
+                constraints.append(geo_json["geometry"]["coordinates"][0])
+            if action == "deleted":
+                constraints.remove(geo_json["geometry"]["coordinates"][0])
+        
+        draw_control.on_draw(handle_draw)
+        self.constraints = constraints
+        return m
+    
+    def flip_coordinates(self, coords):
+        polygons = []
+        for i in range(len(coords)):
+            polygon_coords = [tuple(coord[::-1]) for coord in coords[i]]
+            polygons.append(polygon_coords)
+            
+        return polygons

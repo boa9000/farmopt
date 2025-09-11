@@ -1,21 +1,31 @@
-import farmopt.data_retriever as dr
+import data_retriever as dr
 import numpy as np
 from floris import (
     FlorisModel,
     TimeSeries,
     WindRose,
 )
+import pandas as pd
+import yaml
 
 
-class DataManipulator:
+class ModelData:
     def __init__(self, weather_retriever: dr.WeatherRetriever):
-        self.wather_retriever = weather_retriever
+        self.weather_retriever = weather_retriever
         self.weather = weather_retriever.weather
-        self.reference_height = 100  
-        self.target_height = 90      
-        self.alpha = 0.12             
-        self.turbulence_intensity = 0.06 
         self.wr = None
+
+        with open("config.yml", "r") as f:
+            config = yaml.safe_load(f)
+
+        self.no_of_turbines = config.get("number_of_turbines")
+        self.turbulence_intensity = config.get("turbulence_intensity")
+        self.reference_height = config.get("reference_height", 100)
+        self.target_height = config.get("target_height")
+        self.alpha = config.get("wind_shear")
+        self.ws_resolution = config.get("wind_speed_resolution")
+        self.wd_resolution = config.get("wind_direction_resolution")
+
 
     def wind_rose(self, year = 2023):
         """
@@ -27,21 +37,20 @@ class DataManipulator:
         Returns:
         WindRose: A WindRose object.
         """
-        if not self.weather:
-            self.wather_retriever.retrieve_weather(year)
+        if self.weather is None:
+            self.weather_retriever.retrieve_weather(year)
+            self.weather = self.weather_retriever.weather
         
-        reference_height = self.reference_height
-        target_height = self.target_height
-        alpha = self.alpha
         df = self.weather.copy()
-        df["wind_speed_100m"] = df["wind_speed_100m"] * (target_height / reference_height) ** alpha
-        df["ws"] = (df["wind_speed_100m"] *2).round() /2
-        df["wd"] = (df["wind_direction_100m"] / 30).round() * 30
+        df["wind_speed_100m"] = df["wind_speed_100m"] * (self.target_height / self.reference_height) ** self.alpha
+        df["ws"] = (df["wind_speed_100m"] / self.ws_resolution).round() * self.ws_resolution
+        df["wd"] = (df["wind_direction_100m"] / self.wd_resolution).round() * self.wd_resolution
         df["wd"].replace(360, 0, inplace = True)
-        
-        dff = df.groupby(['ws', 'wd']).value_counts().reset_index()
+        dff = df[['ws', 'wd']]
+        dff = dff.groupby(['ws', 'wd']).value_counts().reset_index()
         dff['freq_val'] = dff['count']/dff['count'].sum()
         dff.drop('count', axis = 1, inplace=True)
+        self.frequency_df = dff
 
         wd = dff['wd'].values
         ws = dff['ws'].values
@@ -65,4 +74,40 @@ class DataManipulator:
         
         self.wr.plot()
 
+
+class FarmModel:
+    def __init__(self, data_manipulator: ModelData):
+        self.data_manipulator = data_manipulator
+        self.wr = data_manipulator.wr
+        self.floris = None
+
+        with open("config.yml", "r") as f:
+            config = yaml.safe_load(f)
+
+        self.model_file = config.get("floris_model_file")
+        self.no_of_turbines = config.get("number_of_turbines")
+
+        self.setup_floris()
+
+    def setup_floris(self):
+        if not self.wr:
+            raise ValueError("Wind rose not generated yet. run setup_floris() after getting wind rose.")
+
+        self.floris = FlorisModel(self.model_file)
+        self.floris.set(wind_data = self.wr)
+
     
+    def new_run(self, positions):
+        xs = [p.x for p in positions]
+        ys = [p.y for p in positions]
+        self.floris.set(layout_x = xs, layout_y= ys)
+        self.floris.run()
+        aep = self.floris.get_farm_AEP()
+
+
+class SimulatedAnnealer:
+    def __init__(self):
+        self.T = 100
+        self.cooling = 0.999
+        
+        
