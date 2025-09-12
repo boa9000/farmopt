@@ -7,7 +7,13 @@ from floris import (
 )
 import pandas as pd
 import yaml
+import logging
 
+
+logging.basicConfig(
+    level=logging.INFO, 
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
 
 class ModelData:
     def __init__(self, weather_retriever: dr.WeatherRetriever):
@@ -52,6 +58,8 @@ class ModelData:
         dff.drop('count', axis = 1, inplace=True)
         self.frequency_df = dff
 
+        # sum all the freq ov over 30 and add them to 30 (or last entry, more robust)
+
         wd = dff['wd'].values
         ws = dff['ws'].values
         freq = dff['freq_val'].values
@@ -76,7 +84,7 @@ class ModelData:
 
 
 class FarmModel:
-    def __init__(self, data_manipulator: ModelData):
+    def __init__(self, data_manipulator: ModelData = None):
         self.data_manipulator = data_manipulator
         self.wr = data_manipulator.wr
         self.floris = None
@@ -96,18 +104,17 @@ class FarmModel:
         self.floris = FlorisModel(self.model_file)
         self.floris.set(wind_data = self.wr)
 
+        floris_logger = logging.getLogger("floris.floris_model.FlorisModel")
+        floris_logger.setLevel(logging.ERROR)
+
     
     def new_run(self, positions):
         xs = [p.x for p in positions]
         ys = [p.y for p in positions]
         self.floris.set(layout_x = xs, layout_y= ys)
         self.floris.run()
-        aep = self.floris.get_farm_AEP()
 
 
-class SimulatedAnnealer:
-    def __init__(self):
-        self.T = 100
-        self.cooling = 0.999
-        
-        
+    def get_aep(self):
+        return self.floris.get_farm_AEP()
+

@@ -4,23 +4,26 @@ discount_rate: 0.07
 energy_price_per_kwh: 0.2  # eur/kWh
 project_lifetime: 30  # in years
 
-number_of_turbines: 10
+number_of_turbines: 5
 
 turbine_cost_per_mw: 1026000  # eur/MW
 operation_cost_per_mw: 0.012  # percentage of the cost per MW
 
 
-lease: false
+lease: true
 land_cost_per_m2: 200   # cost per m2 for land purchase
 land_lease_per_m2: 5    # cost per m2 per year for land lease 
 
-price_of_cable_per_m: 200  # eur/m
+other_costs: 0.3
+
+price_of_cable_per_m: 400  # eur/m includes gravel roads
 price_of_substation: 44000  # eur/MW
 permitting_cost_percent: 0.05
 
+
 #### FLORIS MODELING PARAMETERS ####
-wind_direction_resolution: 15.0
-wind_speed_resolution: 0.5
+wind_direction_resolution: 30.0   # higher number means faster model but less accurate
+wind_speed_resolution: 1          # higher number means faster model but less accurate
 reference_height: 100.0
 wind_shear: 0.12
 turbulence_intensity: 0.06
@@ -29,6 +32,7 @@ floris_model_file: gch.yaml
 turbine_type: nrel_5MW
 target_height: 90.0
 turbine_rating: 5000.0
+
 
 
 

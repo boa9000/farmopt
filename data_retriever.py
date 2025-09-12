@@ -125,7 +125,8 @@ class WeatherRetriever:
             polygon = Polygon(self.coordinates[0])
             centroid = polygon.centroid
             self.centroid = (centroid.y, centroid.x)
-            self.best_epsg = utils.best_epsg(self.centroid)
+            self.best_epsg = utils.best_epsg(centroid)
+            self.country = utils.country_finder(centroid)
 
     def set_constraints(self):
         if self.coordinates is None:

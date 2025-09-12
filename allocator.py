@@ -6,6 +6,13 @@ import numpy as np
 from ipyleaflet import Map, CircleMarker, LayerGroup,GeoJSON
 import time
 import json
+import utils
+import economies
+import simulated_annealing
+from scipy.spatial.distance import pdist, squareform
+from scipy.sparse.csgraph import minimum_spanning_tree
+from pyproj import Transformer
+
 
 class Allocator:
     def __init__(self, data_retriever: dr.WeatherRetriever, fm: mdl.FarmModel):
@@ -13,11 +20,17 @@ class Allocator:
         self.coordinates = data_retriever.coordinates
         self.constraints = data_retriever.constraints
         self.centroid = data_retriever.centroid
+        self.best_epsg = data_retriever.best_epsg
         self.no_of_turbines = fm.no_of_turbines
+        self.fm = fm
         self.bounds = []
         self.available_gdf = None
-        self.allocations = None
+        self.current_allocations = None
+        self.prev_allocations = None
         self.m = None
+        self.econ = economies.Econom()
+        self.sa = simulated_annealing.SimulatedAnnealer()
+        self.transformer = Transformer.from_crs(self.best_epsg, "EPSG:4326", always_xy=True)
 
         self.intitial_allocation()
 
@@ -34,7 +47,7 @@ class Allocator:
         coord_polygons = [Polygon([tuple(pt) for pt in poly]) for poly in self.coordinates]
         gdf_coord = gpd.GeoDataFrame({'geometry': coord_polygons}, crs="EPSG:4326")
 
-        self.available_gdf = gpd.overlay(gdf_coord, gdf_constraints, how="difference").to_crs("EPSG=3035")
+        self.available_gdf = gpd.overlay(gdf_coord, gdf_constraints, how="difference").to_crs(epsg=self.best_epsg)
 
         minx = self.available_gdf.bounds.minx
         miny = self.available_gdf.bounds.miny
@@ -51,11 +64,12 @@ class Allocator:
             allocations.extend([p for p in candidates if self.available_gdf.contains(p).values[0]])
             allocations = allocations[:self.no_of_turbines]  # keep only n_points
         
-        self.allocations = allocations
+        self.current_allocations = allocations
+        self.prev_allocations = self.current_allocations
 
 
     
-    def allocate_turbine(self, R = 1):
+    def allocate_turbine(self):
         minx, miny, maxx, maxy = self.bounds
         x = np.random.uniform(minx, maxx)
         y = np.random.uniform(miny, maxy)
@@ -67,9 +81,35 @@ class Allocator:
             p = Point(x, y)
         
         return p
+    
+
+    def obtain_new_positions(self, i):
+       p = self.allocate_turbine()
+       self.current_allocations[i] = p
+
+
+    def run(self):
+        for iteration in range(100):
+            for i in range(len(self.current_allocations)):
+                self.obtain_new_positions(i)
+                self.fm.new_run(self.current_allocations)  # run Fmodel
+                aep = self.fm.get_aep()  # obtain aep
+                cables_length,subs = self.get_cables_length_and_substation()
+                lcoe = self.econ.get_lcoe(aep,cables_length)   # obtain lcoe
+                self.sa.check_AEP(aep, self.current_allocations)  # check aep
+                self.sa.check_LCOE(lcoe, self.current_allocations)  # check lcoe
+                acceptance = self.sa.annealing_acceptance(lcoe)  # check annealingacc
+                if acceptance:  # change pos or not
+                    self.prev_allocations = self.current_allocations
+                else:
+                    self.current_allocations = self.prev_allocations
+                self.sa.update()
+                self.update_points()# update
+
+
 
     def mapper(self):
-        if self.allocations is None:
+        if self.current_allocations is None:
             raise RuntimeError("Cannot run this before allocations are initialized")
         
         self.m = Map(center=self.centroid, zoom=10)
@@ -78,7 +118,7 @@ class Allocator:
 
         self.update_points()
 
-        geo_json_data = json.loads(self.available_gdf.to_json())
+        geo_json_data = json.loads(self.available_gdf.to_crs(epsg=4326).to_json())
         geo_json_layer = GeoJSON(data=geo_json_data, style={
             "color": "blue",
             "opacity": 1,
@@ -90,23 +130,31 @@ class Allocator:
         return self.m
 
 
-    def start(self):
-        if self.m is None:
-            raise RuntimeError("Run mapper() first.")
-        for i in range(500):
-            idx = np.random.randint(len(self.allocations))
-            self.allocations[idx] = self.allocate_turbine()
-            self.update_points()
-            time.sleep(0.01) 
-
-
 
     def update_points(self):
         # Clear previous points
         self.points_layer.clear_layers()
-        
+        points = self.transform_points()
         # Add current points
-        for point in self.allocations:
+        for point in points:
             lat, lon = point.y, point.x  # ipyleaflet expects (lat, lon)
             marker = CircleMarker(location=(lat, lon), radius=2, color="red", fill_color="red")
             self.points_layer.add_layer(marker)
+
+
+    def transform_points(self):
+        points_epsg4326 = []
+        for pt in self.current_allocations:
+            lon, lat = self.transformer.transform(pt.x, pt.y)
+            points_epsg4326.append(Point(lon, lat))
+        return points_epsg4326
+
+
+
+    def get_cables_length_and_substation(self):
+        coords = np.array([[p.x, p.y] for p in self.current_allocations])
+        dist_matrix = squareform(pdist(coords))  
+        mst = minimum_spanning_tree(dist_matrix)
+        centroid = np.mean(coords, axis=0)
+        substation = Point(centroid[0], centroid[1])
+        return mst.sum(), substation
