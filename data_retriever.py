@@ -134,7 +134,7 @@ class WeatherRetriever:
         elif self.centroid is None:
             self.calculate_centroid() 
         
-        m = Map(center = self.centroid, zoom = 10)
+        m = Map(center = self.centroid, zoom = 12)
         draw_control = DrawControl(circle = {}, circlemarker = {}, marker = {}, polyline = {})
         draw_control.polygon = {
             "shapeOptions": {

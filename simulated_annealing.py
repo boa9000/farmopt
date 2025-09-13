@@ -9,11 +9,11 @@ logging.basicConfig(
 
 
 class SimulatedAnnealer:
-    def __init__(self, verbose = True):
-        self.T = 0.5
-        self.cooling = 0.99
-        self.R = 1000
-        self.max_iter = 5000
+    def __init__(self, iterations, verbose = True):
+        self.T = 0.002
+        self.T_final = 1e-5 
+        self.iterations = iterations
+        self.cooling = (self.T_final / self.T) ** (1 / self.iterations)
         self.min_LCOE = 2.0
         self.min_LCOE_hist = []
         self.min_LCOE_alloc = []
@@ -23,11 +23,14 @@ class SimulatedAnnealer:
         self.current_LCOE = 2.0
         self.prev_LCOE = 2.0
         self.delta_list = []
+        self.lcoe_hist = []
+        self.aep_hist = []
 
 
         self.verbose = verbose
 
     def check_LCOE(self, lcoe, allocations):
+        self.lcoe_hist.append(lcoe)
         if lcoe < self.min_LCOE:
             self.min_LCOE = lcoe
             self.min_LCOE_hist.append(self.min_LCOE)
@@ -36,6 +39,7 @@ class SimulatedAnnealer:
                 logging.info(f"New min_LCOE: {self.min_LCOE}")
 
     def check_AEP(self, aep, allocations):
+        self.aep_hist.append(aep)
         if aep > self.max_AEP:
             self.max_AEP = aep
             self.max_AEP_hist.append(self.max_AEP)

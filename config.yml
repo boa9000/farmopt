@@ -7,18 +7,18 @@ project_lifetime: 30  # in years
 number_of_turbines: 5
 
 turbine_cost_per_mw: 1026000  # eur/MW
-operation_cost_per_mw: 0.012  # percentage of the cost per MW
+operation_cost_per_mw: 0.02  # percentage of the cost per MW
 
 
 lease: true
 land_cost_per_m2: 200   # cost per m2 for land purchase
-land_lease_per_m2: 5    # cost per m2 per year for land lease 
+land_lease_per_m2: 0.05    # cost per m2 per year for land lease 
 
-other_costs: 0.3
+other_costs: 0.5 # percent of turbine cost for other costs
 
-price_of_cable_per_m: 400  # eur/m includes gravel roads
+price_of_cable_per_m: 600  # eur/m includes gravel roads
 price_of_substation: 44000  # eur/MW
-permitting_cost_percent: 0.05
+permitting_cost_percent: 0.10
 
 
 #### FLORIS MODELING PARAMETERS ####
@@ -33,6 +33,25 @@ turbine_type: nrel_5MW
 target_height: 90.0
 turbine_rating: 5000.0
 
+#### SIMULATED ANNEALING PARAMETERS ####
+iterations: 100
 
 
+# order
 
+# import allocator
+# import modeling as mdl
+# import data_retriever as dr
+# wr = dr.WeatherRetriever()
+
+# wr.get_coordinates()
+
+# wr.set_constraints()
+
+# md = mdl.ModelData(wr)
+# fm = mdl.FarmModel(md)
+# alc = allocator.Allocator(wr, fm)
+
+# alc.mapper()
+
+# alc.run()

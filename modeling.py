@@ -32,6 +32,7 @@ class ModelData:
         self.ws_resolution = config.get("wind_speed_resolution")
         self.wd_resolution = config.get("wind_direction_resolution")
 
+        self.wind_rose()
 
     def wind_rose(self, year = 2023):
         """
@@ -48,6 +49,7 @@ class ModelData:
             self.weather = self.weather_retriever.weather
         
         df = self.weather.copy()
+        df["wind_speed_100m"] = df["wind_speed_100m"].clip(upper=30)
         df["wind_speed_100m"] = df["wind_speed_100m"] * (self.target_height / self.reference_height) ** self.alpha
         df["ws"] = (df["wind_speed_100m"] / self.ws_resolution).round() * self.ws_resolution
         df["wd"] = (df["wind_direction_100m"] / self.wd_resolution).round() * self.wd_resolution
@@ -57,8 +59,15 @@ class ModelData:
         dff['freq_val'] = dff['count']/dff['count'].sum()
         dff.drop('count', axis = 1, inplace=True)
         self.frequency_df = dff
+        
 
         # sum all the freq ov over 30 and add them to 30 (or last entry, more robust)
+        # extra = dff.loc[df["ws"] > 30].groupby("wd")["freq_val"].sum()
+        # dff = dff[dff["ws"] <= 30]
+        # dff.loc[dff.index[-1], "freq_val"] += extra
+        # set all ws above 30 as 30 in the weather file from the beginning
+
+        self.dff = dff # for debugging
 
         wd = dff['wd'].values
         ws = dff['ws'].values
@@ -74,7 +83,7 @@ class ModelData:
 
         self.wr = time_series.to_WindRose(wd_step=wd_step, ws_step=ws_step, bin_weights=freq)
         
-        return self.wr
+        self.plot_wind_rose()
         
     def plot_wind_rose(self):
         if not self.wr:

@@ -12,6 +12,7 @@ import simulated_annealing
 from scipy.spatial.distance import pdist, squareform
 from scipy.sparse.csgraph import minimum_spanning_tree
 from pyproj import Transformer
+import yaml
 
 
 class Allocator:
@@ -21,6 +22,7 @@ class Allocator:
         self.constraints = data_retriever.constraints
         self.centroid = data_retriever.centroid
         self.best_epsg = data_retriever.best_epsg
+        self.country = data_retriever.country
         self.no_of_turbines = fm.no_of_turbines
         self.fm = fm
         self.bounds = []
@@ -28,11 +30,16 @@ class Allocator:
         self.current_allocations = None
         self.prev_allocations = None
         self.m = None
-        self.econ = economies.Econom()
-        self.sa = simulated_annealing.SimulatedAnnealer()
         self.transformer = Transformer.from_crs(self.best_epsg, "EPSG:4326", always_xy=True)
 
+        with open("config.yml", "r") as f:
+            config = yaml.safe_load(f)
+        
+        self.iterations = config.get("iterations")
         self.intitial_allocation()
+
+        self.econ = economies.Econom(self.country, self.area)
+        self.sa = simulated_annealing.SimulatedAnnealer(self.iterations)
 
     def intitial_allocation(self):
         if self.coordinates is None:
@@ -46,8 +53,12 @@ class Allocator:
 
         coord_polygons = [Polygon([tuple(pt) for pt in poly]) for poly in self.coordinates]
         gdf_coord = gpd.GeoDataFrame({'geometry': coord_polygons}, crs="EPSG:4326")
+        self.area = gdf_coord.to_crs(epsg=self.best_epsg).geometry.area.sum()
+
 
         self.available_gdf = gpd.overlay(gdf_coord, gdf_constraints, how="difference").to_crs(epsg=self.best_epsg)
+        self.area_cut = self.available_gdf.geometry.area.sum()
+
 
         minx = self.available_gdf.bounds.minx
         miny = self.available_gdf.bounds.miny
@@ -89,7 +100,7 @@ class Allocator:
 
 
     def run(self):
-        for iteration in range(100):
+        for iteration in range(self.iterations):
             for i in range(len(self.current_allocations)):
                 self.obtain_new_positions(i)
                 self.fm.new_run(self.current_allocations)  # run Fmodel
@@ -101,6 +112,7 @@ class Allocator:
                 acceptance = self.sa.annealing_acceptance(lcoe)  # check annealingacc
                 if acceptance:  # change pos or not
                     self.prev_allocations = self.current_allocations
+
                 else:
                     self.current_allocations = self.prev_allocations
                 self.sa.update()
@@ -158,3 +170,8 @@ class Allocator:
         centroid = np.mean(coords, axis=0)
         substation = Point(centroid[0], centroid[1])
         return mst.sum(), substation
+
+    def show_best_lcoe(self):
+        self.current_allocations = self.sa.min_LCOE_alloc
+        self.update_points()
+        print(f"Best LCOE is {self.sa.min_LCOE*100:.2f} ct/kWh")
