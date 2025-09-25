@@ -125,7 +125,6 @@ class Allocator:
                 if acceptance:  # change pos or not
                     self.prev_allocations = self.current_allocations
                     self.update_points() # update map
-                    print("accepted")
                 else:
                     self.current_allocations = self.prev_allocations
                 self.sa.update()
