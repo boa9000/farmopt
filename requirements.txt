@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 floris==4.4.2
 geopandas==1.1.1
 ipyleaflet==0.20.0
@@ -11,3 +12,18 @@ requests_cache==1.2.1
 retry_requests==2.0.0
 scipy==1.16.2
 Shapely==2.1.2
+=======
+floris==4.4.2
+geopandas==1.1.1
+ipyleaflet==0.20.0
+numpy==2.3.3
+openmeteo_requests==1.7.2
+pandas==2.3.2
+pyproj==3.6.1
+PyYAML==6.0.2
+PyYAML==6.0.2
+requests_cache==1.2.1
+retry_requests==2.0.0
+scipy==1.16.2
+Shapely==2.1.2
+>>>>>>> 26c2c36755610f5dd2600b2105b6a64b1491d72d
