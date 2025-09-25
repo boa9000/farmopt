@@ -34,7 +34,7 @@ class Econom:
 
         self.land_cost = self.get_land_price(country, area)
         
-
+        # include energy price and potential losses between min lcoe and max lcoe?
 
     def calculate_capex(self, cable_length):
         capex = 0
@@ -56,7 +56,7 @@ class Econom:
 
     def get_lcoe(self, aep, cable_length):
         self.calculate_capex(cable_length)
-        return ((self.capex * self.crf + (self.opex)) / aep) * 1000 # because aep is in Wh, to change to kWh/eur
+        return ((self.capex * self.crf + (self.opex)) / aep) * 1000 *100 # because aep is in Wh, to change to eur/kwh then again to ct/kwh
         
     
     def get_land_price(self, country, area):

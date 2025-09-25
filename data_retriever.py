@@ -4,18 +4,66 @@ import requests_cache
 from retry_requests import retry
 from ipyleaflet import Map, DrawControl
 from ipyleaflet import Polygon as LeafletPolygon
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, MultiPolygon
 import utils
 
 
 
 class WeatherRetriever:
-    def __init__(self):
+    def __init__(self, default = False):
         self.coordinates = None
         self.constraints = None
         self.centroid = None
         self.weather = None
-        
+
+        if default:
+            self.coordinates = [[[15.07925, 52.222121],
+                                [15.054703, 52.232531],
+                                [15.068092, 52.238523],
+                                [15.059166, 52.251977],
+                                [15.095215, 52.25597],
+                                [15.130234, 52.251556],
+                                [15.133324, 52.244515],
+                                [15.124397, 52.225486],
+                                [15.092468, 52.21823],
+                                [15.07925, 52.222121]],
+                                [[15.070152, 52.216652],
+                                [15.057449, 52.223383],
+                                [15.067062, 52.223383],
+                                [15.074272, 52.218335],
+                                [15.070152, 52.216652]],
+                                [[15.066719, 52.257231],
+                                [15.090408, 52.263115],
+                                [15.128174, 52.262064],
+                                [15.136757, 52.259542],
+                                [15.135384, 52.257021],
+                                [15.122337, 52.254288],
+                                [15.066719, 52.257231]]]
+            self.constraints = [[[15.101051, 52.245881],
+                                [15.094185, 52.237892],
+                                [15.103798, 52.233267],
+                                [15.114441, 52.235159],
+                                [15.120964, 52.23621],
+                                [15.121994, 52.243358],
+                                [15.101051, 52.245881]],
+                                [[15.091782, 52.253238],
+                                [15.103798, 52.258912],
+                                [15.102081, 52.251346],
+                                [15.097618, 52.248193],
+                                [15.091782, 52.253238]],
+                                [[15.087662, 52.223173],
+                                [15.057793, 52.230113],
+                                [15.058479, 52.233898],
+                                [15.075302, 52.236421],
+                                [15.096245, 52.238103],
+                                [15.098991, 52.226538],
+                                [15.087662, 52.223173]],
+                                [[15.052643, 52.243358],
+                                [15.095901, 52.268367],
+                                [15.067062, 52.245461],
+                                [15.052643, 52.243358]]]
+            self.calculate_centroid()
+                                        
 
     def retrieve_weather(self, year = 2023):
         """
@@ -119,11 +167,12 @@ class WeatherRetriever:
         """
         if not self.coordinates:
             raise ValueError("No coordinates available. Please draw a polygon first.")
-        elif len(self.coordinates) > 1:
-            raise ValueError(f"Please draw just one polygon. {len(self.coordinates)} polygons detected.")
+        # elif len(self.coordinates) > 1:
+        #     raise ValueError(f"Please draw just one polygon. {len(self.coordinates)} polygons detected.")
         else:
-            polygon = Polygon(self.coordinates[0])
-            centroid = polygon.centroid
+            polygons = [Polygon(coords) for coords in self.coordinates]
+            multi = MultiPolygon(polygons) 
+            centroid = multi.centroid
             self.centroid = (centroid.y, centroid.x)
             self.best_epsg = utils.best_epsg(centroid)
             self.country = utils.country_finder(centroid)
@@ -151,7 +200,7 @@ class WeatherRetriever:
         }
         m.add_control(draw_control)
 
-        polygon_coords = self.flip_coordinates(self.coordinates)[0]
+        polygon_coords = self.flip_coordinates(self.coordinates)
         polygon = LeafletPolygon(
             locations=polygon_coords,
             color="blue",  

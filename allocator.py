@@ -31,6 +31,7 @@ class Allocator:
         self.prev_allocations = None
         self.m = None
         self.transformer = Transformer.from_crs(self.best_epsg, "EPSG:4326", always_xy=True)
+        
 
         with open("config.yml", "r") as f:
             config = yaml.safe_load(f)
@@ -38,8 +39,12 @@ class Allocator:
         self.iterations = config.get("iterations")
         self.intitial_allocation()
 
+        self.R0 = np.sqrt(self.area) 
+        self.R = self.R0
+
         self.econ = economies.Econom(self.country, self.area)
         self.sa = simulated_annealing.SimulatedAnnealer(self.iterations)
+
 
     def intitial_allocation(self):
         if self.coordinates is None:
@@ -59,12 +64,8 @@ class Allocator:
         self.available_gdf = gpd.overlay(gdf_coord, gdf_constraints, how="difference").to_crs(epsg=self.best_epsg)
         self.area_cut = self.available_gdf.geometry.area.sum()
 
-
-        minx = self.available_gdf.bounds.minx
-        miny = self.available_gdf.bounds.miny
-        maxx = self.available_gdf.bounds.maxx
-        maxy = self.available_gdf.bounds.maxy
-        self.bounds = [minx, miny, maxx, maxy]
+        minx, miny, maxx, maxy = self.available_gdf.total_bounds
+        self.bounds = self.available_gdf.total_bounds
         allocations = []
         
         # generate more points than needed, filter inside polygon
@@ -80,22 +81,34 @@ class Allocator:
 
 
     
-    def allocate_turbine(self):
+    def allocate_turbine_absolute(self):
         minx, miny, maxx, maxy = self.bounds
         x = np.random.uniform(minx, maxx)
         y = np.random.uniform(miny, maxy)
         p = Point(x, y)
 
-        while not self.available_gdf.contains(p).values[0]:
+        while not self.available_gdf.contains(p).values.any():
             x = np.random.uniform(minx, maxx)
             y = np.random.uniform(miny, maxy)
             p = Point(x, y)
         
         return p
     
+    def allocate_turbine(self, pos):
+        x = np.random.uniform(pos.x-self.R, pos.x+self.R)
+        y = np.random.uniform(pos.y-self.R, pos.y+self.R)
+        p = Point(x, y)
+
+        while not self.available_gdf.contains(p).values.any():
+            x = np.random.uniform(pos.x-self.R, pos.x+self.R)
+            y = np.random.uniform(pos.y-self.R, pos.y+self.R)
+            p = Point(x, y)
+        
+        return p
+        
 
     def obtain_new_positions(self, i):
-       p = self.allocate_turbine()
+       p = self.allocate_turbine(self.current_allocations[i])
        self.current_allocations[i] = p
 
 
@@ -106,17 +119,17 @@ class Allocator:
                 self.fm.new_run(self.current_allocations)  # run Fmodel
                 aep = self.fm.get_aep()  # obtain aep
                 cables_length,subs = self.get_cables_length_and_substation()
-                lcoe = self.econ.get_lcoe(aep,cables_length)   # obtain lcoe
-                self.sa.check_AEP(aep, self.current_allocations)  # check aep
-                self.sa.check_LCOE(lcoe, self.current_allocations)  # check lcoe
+                lcoe = self.econ.get_lcoe(aep,cables_length)   # obtain lcoe  
+                self.sa.check_LCOE(lcoe, self.current_allocations, aep)  # check lcoe # check aep with lcoe
                 acceptance = self.sa.annealing_acceptance(lcoe)  # check annealingacc
                 if acceptance:  # change pos or not
                     self.prev_allocations = self.current_allocations
-
+                    self.update_points() # update map
+                    print("accepted")
                 else:
                     self.current_allocations = self.prev_allocations
                 self.sa.update()
-                self.update_points()# update
+            self.R = max(self.R0*0.1, self.R0 * (1 - iteration / self.iterations))
 
 
 
@@ -174,4 +187,4 @@ class Allocator:
     def show_best_lcoe(self):
         self.current_allocations = self.sa.min_LCOE_alloc
         self.update_points()
-        print(f"Best LCOE is {self.sa.min_LCOE*100:.2f} ct/kWh")
+        print(f"Best LCOE is {self.sa.min_LCOE:.2f} ct/kWh")
