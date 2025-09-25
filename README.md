@@ -1,0 +1,2 @@
+A tool to find the best allocation of wind turbines in an area on the map. The map is interactive, so a user can input the specified area and the constraints through a map.
+Keep in mind it is meant to be run in a jupyter notebook. So if you want to run the code as quickly as possible, please visit this google Colab link: https://colab.research.google.com/drive/1AyqrGDcX1nDkmdrQUctnzBWUt25utav9?usp=sharing
