@@ -168,14 +168,18 @@ class MapInterface:
             self.btn_back.disabled = True
             self.btn_next.disabled = False
             self.btn_start.disabled = True
+            self.turbines_no_slider.disabled = False
+            self.iter_slider.disabled = False
         elif self.state == 1:
             self.step_label.value = "Step 2/3: Set constraints"
             self.btn_back.disabled = False
             self.btn_next.disabled = False
             self.btn_start.disabled = True
+            self.turbines_no_slider.disabled = False
+            self.iter_slider.disabled = False
         elif self.state == 2:
             self.no_of_turbines = self.turbines_no_slider.value
-            self.step_label.value = "Step 3/3: Run model by clicking Start"
+            self.step_label.value = "Step 3/3: Run optimization by clicking Start"
             self.btn_back.disabled = False
             self.btn_next.disabled = True
             self.btn_start.disabled = False

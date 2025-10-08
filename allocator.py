@@ -147,11 +147,18 @@ class Allocator:
         self.m.add_layer(self.points_layer)
         self.m.add_layer(self.labels_layer)
 
-        self.label_marker = Marker(location=(self.maxy+0.025, self.centroid[1]), draggable=True)
-        
+        icon = DivIcon(html=(f'Press the "Start" button to start.<br>'
+                             f'Red dots represent each turbine.<br>'
+                             f'Each iteration consists of moving each turbine.<br>'
+                             f'Each move can be accepted or rejected.<br>'
+                             f'When accepted it shows on the map.<br>'
+                             ), icon_size=[250, 100])
+
+        self.label_marker = Marker(location=(self.maxy+0.025, self.centroid[1]), icon=icon, draggable=True)
+
         self.labels_layer.add_layer(self.label_marker)
         
-        self.update_labels()
+        
         self.update_points()
 
         geo_json_data = json.loads(self.available_gdf.to_crs(epsg=4326).to_json())
