@@ -3,7 +3,8 @@ import data_retriever as dr
 import modeling as mdl
 from shapely.geometry import Polygon, MultiPolygon, Point
 import numpy as np
-from ipyleaflet import Map, CircleMarker, LayerGroup,GeoJSON
+from ipyleaflet import Map, CircleMarker, LayerGroup, GeoJSON, Marker, Popup, DivIcon
+import ipywidgets as widgets
 import time
 import json
 import utils
@@ -30,6 +31,7 @@ class Allocator:
         self.current_allocations = None
         self.prev_allocations = None
         self.m = None
+        self.iter = 0
         self.transformer = Transformer.from_crs(self.best_epsg, "EPSG:4326", always_xy=True)
         
 
@@ -67,6 +69,7 @@ class Allocator:
         minx, miny, maxx, maxy = self.available_gdf.total_bounds
         self.bounds = self.available_gdf.total_bounds
         allocations = []
+        self.maxx, self.maxy = self.transformer.transform(maxx, maxy)
         
         # generate more points than needed, filter inside polygon
         while len(allocations) < self.no_of_turbines:
@@ -125,11 +128,13 @@ class Allocator:
                 if acceptance:  # change pos or not
                     self.prev_allocations = self.current_allocations
                     self.update_points() # update map
+                    self.update_labels()
                 else:
                     self.current_allocations = self.prev_allocations
                 self.sa.update()
             self.R = max(self.R0*0.1, self.R0 * (1 - iteration / self.iterations))
-
+            self.iter = iteration + 1
+            self.update_labels()
 
 
     def mapper(self):
@@ -138,8 +143,15 @@ class Allocator:
         
         self.m = Map(center=self.centroid, zoom=10)
         self.points_layer = LayerGroup()
+        self.labels_layer = LayerGroup()
         self.m.add_layer(self.points_layer)
+        self.m.add_layer(self.labels_layer)
 
+        self.label_marker = Marker(location=(self.maxy+0.025, self.centroid[1]), draggable=True)
+        
+        self.labels_layer.add_layer(self.label_marker)
+        
+        self.update_labels()
         self.update_points()
 
         geo_json_data = json.loads(self.available_gdf.to_crs(epsg=4326).to_json())
@@ -166,6 +178,17 @@ class Allocator:
             self.points_layer.add_layer(marker)
 
 
+    def update_labels(self):
+        self.label_marker.icon = DivIcon(
+            html=(
+            f'min LCOE: {self.sa.min_LCOE:.3f} ct/kWh<br>'
+            f'max AEP: {self.sa.max_AEP/1e6:.3f} MWh<br>'
+            f'iteration: {self.iter}/{self.iterations}<br>'
+            f"latest LCOE: {self.sa.lcoe_hist[-1]:.3f} ct/kWh" if self.sa.lcoe_hist else ""
+            ),
+            icon_size=[170, 75]
+        )
+
     def transform_points(self):
         points_epsg4326 = []
         for pt in self.current_allocations:
@@ -186,4 +209,32 @@ class Allocator:
     def show_best_lcoe(self):
         self.current_allocations = self.sa.min_LCOE_alloc
         self.update_points()
-        print(f"Best LCOE is {self.sa.min_LCOE:.2f} ct/kWh")
+        print(f"Best LCOE is {self.sa.min_LCOE:.3f} ct/kWh")
+
+    def show_best_aep(self):
+        self.current_allocations = self.sa.max_AEP_alloc
+        self.update_points()
+        print(f"Best AEP is {self.sa.max_AEP/1e6:.3f} MWh")
+
+    def print_summary(self):
+        print(f"Best LCOE is {self.sa.min_LCOE:.3f} ct/kWh")
+        print(f"AEP at min LCOE is {self.sa.aep_at_min_lcoe/1e6:.3f} MWh")
+        print(f"wake losses at min LCOE: {self.fm.get_wake_losses(self.sa.min_LCOE_alloc):.3f} %")
+        print(f"Best AEP is {self.sa.max_AEP/1e6:.3f} MWh")
+        cables_length, subs = self.get_cables_length_and_substation()
+        lcoe = self.econ.get_lcoe(self.sa.max_AEP, cables_length)
+        print(f"LCOE at max AEP is {lcoe:.3f} ct/kWh")
+        wake_losses = self.fm.get_wake_losses(self.sa.max_AEP_alloc)
+        print(f"Wake losses at max AEP: {wake_losses:.3f} %")
+        print(f"Land area: {self.area/1e6:.3f} km2")
+        print(f"Available land area after constraints: {self.area_cut/1e6:.3f} km2")
+        print(f"Land cost: {self.econ.land_cost/1e6:.2f} MEUR")
+        print(f"Total capex: {self.econ.capex/1e6:.2f} MEUR")
+        print(f"Cable length: {cables_length/1e3:.2f} km")
+        print(f"Substation location (EPSG:{self.best_epsg}): ({subs.y:.4f}, {subs.x:.4f})")
+
+    def update_iterations(self, iterations):
+        self.iterations = iterations
+        self.sa.iterations = iterations
+        self.sa.cooling = (self.sa.T_final / self.sa.T) ** (1 / self.sa.iterations)
+

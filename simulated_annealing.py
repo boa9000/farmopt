@@ -36,6 +36,7 @@ class SimulatedAnnealer:
             self.min_LCOE = lcoe
             self.min_LCOE_hist.append(self.min_LCOE)
             self.min_LCOE_alloc = allocations
+            self.aep_at_min_lcoe = aep
             if self.verbose:
                 logging.info(f"New min_LCOE: {self.min_LCOE}")
         self.check_AEP(aep,allocations)

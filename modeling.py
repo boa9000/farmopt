@@ -53,7 +53,7 @@ class ModelData:
         df["wind_speed_100m"] = df["wind_speed_100m"] * (self.target_height / self.reference_height) ** self.alpha
         df["ws"] = (df["wind_speed_100m"] / self.ws_resolution).round() * self.ws_resolution
         df["wd"] = (df["wind_direction_100m"] / self.wd_resolution).round() * self.wd_resolution
-        df["wd"].replace(360, 0, inplace = True)
+        df["wd"] = df["wd"].replace(360, 0)
         dff = df[['ws', 'wd']]
         dff = dff.groupby(['ws', 'wd']).value_counts().reset_index()
         dff['freq_val'] = dff['count']/dff['count'].sum()
@@ -83,7 +83,7 @@ class ModelData:
 
         self.wr = time_series.to_WindRose(wd_step=wd_step, ws_step=ws_step, bin_weights=freq)
         
-        self.plot_wind_rose()
+        #self.plot_wind_rose()
         
     def plot_wind_rose(self):
         if not self.wr:
@@ -93,7 +93,7 @@ class ModelData:
 
 
 class FarmModel:
-    def __init__(self, data_manipulator: ModelData = None):
+    def __init__(self, data_manipulator: ModelData = None, no_of_turbines: int = None):
         self.data_manipulator = data_manipulator
         self.wr = data_manipulator.wr
         self.floris = None
@@ -102,7 +102,10 @@ class FarmModel:
             config = yaml.safe_load(f)
 
         self.model_file = config.get("floris_model_file")
-        self.no_of_turbines = config.get("number_of_turbines")
+        if no_of_turbines is not None:
+            self.no_of_turbines = no_of_turbines
+        else:
+            self.no_of_turbines = config.get("number_of_turbines")
 
         self.setup_floris()
 
@@ -127,3 +130,12 @@ class FarmModel:
     def get_aep(self):
         return self.floris.get_farm_AEP()
 
+    def get_aep_without_wake(self):
+        self.floris.run_no_wake()
+        return self.floris.get_farm_AEP()
+    
+    def get_wake_losses(self, allocations):
+        self.new_run(allocations)
+        aep = self.get_aep()
+        aep_no_wake = self.get_aep_without_wake()
+        return (aep_no_wake - aep) / aep_no_wake * 100
