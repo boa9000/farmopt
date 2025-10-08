@@ -2,13 +2,11 @@ floris==4.4.2
 geopandas==1.1.1
 ipyleaflet==0.20.0
 ipython==9.5.0
-ipywidgets==8.1.5
 ipywidgets==8.1.7
 numpy==2.3.3
 openmeteo_requests==1.7.3
 pandas==2.3.3
 pyproj==3.6.1
-PyYAML==6.0.2
 PyYAML==6.0.3
 requests_cache==1.2.1
 retry_requests==2.0.0
